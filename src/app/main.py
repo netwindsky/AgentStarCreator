@@ -547,7 +547,7 @@ def show_running_page(agent_id: int):
     st.subheader("📝 当前Prompt")
     if runner.prompt:
         with st.expander("查看Prompt", expanded=False):
-            st.code(runner.prompt[:2000] + ("..." if len(runner.prompt) > 2000 else ""), language="markdown")
+            st.code(runner.prompt, language="markdown")
     
     st.subheader("� 当前迭代任务结果")
     if runner.current_results:
@@ -557,7 +557,7 @@ def show_running_page(agent_id: int):
                 st.info(result['task'])
                 
                 st.markdown("**Agent输出:**")
-                st.code(result['output'][:1500] + ("..." if len(result['output']) > 1500 else ""), language="markdown")
+                st.code(result['output'], language="markdown")
                 
                 col_a, col_b = st.columns(2)
                 with col_a:
@@ -602,13 +602,13 @@ def show_running_page(agent_id: int):
         for iter_data in runner.iteration_results:
             with st.expander(f"迭代 {iter_data['iteration']} - 平均分: {iter_data['avg_score']:.2f}", expanded=False):
                 st.markdown("**该迭代Prompt:**")
-                st.code(iter_data['prompt'][:1000] + ("..." if len(iter_data['prompt']) > 1000 else ""), language="markdown")
+                st.code(iter_data['prompt'], language="markdown")
                 
                 st.markdown("**任务执行结果:**")
                 for idx, result in enumerate(iter_data['results'], 1):
                     st.markdown(f"**任务 {idx}:**")
-                    st.info(result['task'][:200] + ("..." if len(result['task']) > 200 else ""))
-                    st.code(result['output'][:800] + ("..." if len(result['output']) > 800 else ""), language="markdown")
+                    st.info(result['task'])
+                    st.code(result['output'], language="markdown")
                     st.caption(f"评分: {result['evaluation'].final_score:.2f} | 格式: {'✅' if result['format_check'] else '❌'}")
     
     if runner.completed or runner.error:
@@ -640,7 +640,7 @@ def show_history_page():
     for agent in agents:
         with st.expander(f"#{agent['id']} {agent['role']} - {agent['status']} ({agent['created_at']})"):
             st.markdown(f"**输出格式**: {agent['output_format']}")
-            st.markdown(f"**需求**: {agent['user_requirement'][:200]}...")
+            st.markdown(f"**需求**: {agent['user_requirement']}")
             
             iterations = db.get_iterations(agent['id'])
             
@@ -650,7 +650,7 @@ def show_history_page():
             
             if agent['final_prompt']:
                 st.markdown("**最终Prompt**:")
-                st.code(agent['final_prompt'][:500] + "...", language="markdown")
+                st.code(agent['final_prompt'], language="markdown")
 
 
 def show_settings_page():
