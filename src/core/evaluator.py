@@ -1,5 +1,6 @@
 import json
 import re
+import yaml
 from typing import Optional
 from dataclasses import dataclass
 
@@ -32,6 +33,85 @@ class Evaluator:
         r'超时',
         r'Timeout',
     ]
+    
+    FORMAT_RULES = {
+        "markdown": """
+【Markdown格式标准】(5分制):
+- 5分: 完全符合Markdown规范，包括:
+  * 正确使用标题层级(# ## ###)
+  * 列表(有序/无序)格式正确
+  * 代码块使用```包裹并标注语言
+  * 链接和图片语法正确
+  * 表格使用标准语法
+  * 强调(*或_)正确使用
+- 4分: 格式基本正确，有1-2处不规范
+- 3分: 格式部分正确，但有多处不规范
+- 2分: 格式混乱，难以阅读
+- 1分: 完全未使用Markdown格式
+""",
+        "json": """
+【JSON格式标准】(5分制):
+- 5分: 完全符合JSON规范:
+  * 有效的JSON字符串
+  * 键名使用双引号
+  * 无尾部逗号
+  * 数据类型正确
+  * 结构清晰完整
+- 4分: 基本有效JSON，有1处小问题
+- 3分: JSON基本有效，但结构不完整
+- 2分: JSON格式错误但可修复
+- 1分: 完全无效的JSON
+""",
+        "yaml": """
+【YAML格式标准】(5分制):
+- 5分: 完全符合YAML规范:
+  * 缩进正确(空格，不能用tab)
+  * 键值对格式正确
+  * 列表格式正确
+  * 无语法错误
+- 4分: 基本正确，有1-2处不规范
+- 3分: 格式部分正确
+- 2分: 格式混乱
+- 1分: 完全无效的YAML
+""",
+        "xml": """
+【XML格式标准】(5分制):
+- 5分: 完全符合XML规范:
+  * 标签配对正确
+  * 属性使用引号
+  * 有正确的声明
+  * 结构清晰
+- 4分: 基本正确，有1-2处不规范
+- 3分: 格式部分正确
+- 2分: 格式混乱
+- 1分: 完全无效的XML
+""",
+        "csv": """
+【CSV格式标准】(5分制):
+- 5分: 完全符合CSV规范:
+  * 表头清晰
+  * 列数一致
+  * 无多余空白
+  * 逗号分隔正确
+  * 无合并单元格
+- 4分: 基本正确，有1-2处不规范
+- 3分: 格式部分正确
+- 2分: 格式混乱
+- 1分: 完全无效的CSV
+""",
+        "纯文本": """
+【纯文本格式标准】(5分制):
+- 5分: 文本清晰易读:
+  * 段落分明
+  * 无乱码
+  * 适当换行
+  * 层次清晰
+- 4分: 基本清晰，有小问题
+- 3分: 可读性一般
+- 2分: 难以阅读
+- 1分: 混乱无结构
+"""
+    }
     
     SCORING_RULES = """
 ========================================
@@ -75,6 +155,22 @@ class Evaluator:
     def __init__(self, eval_client: ModelClient, output_format: str):
         self.eval_client = eval_client
         self.output_format = output_format
+        self.format_type = self._detect_format_type(output_format)
+    
+    def _detect_format_type(self, output_format: str) -> str:
+        fmt_lower = output_format.lower()
+        if "markdown" in fmt_lower or "md" in fmt_lower:
+            return "markdown"
+        elif "json" in fmt_lower:
+            return "json"
+        elif "yaml" in fmt_lower or "yml" in fmt_lower:
+            return "yaml"
+        elif "xml" in fmt_lower:
+            return "xml"
+        elif "csv" in fmt_lower:
+            return "csv"
+        else:
+            return "纯文本"
     
     def _is_error_output(self, output: str) -> tuple:
         for pattern in self.ERROR_PATTERNS:
@@ -83,7 +179,51 @@ class Evaluator:
         return False, ""
     
     def get_scoring_rules(self) -> str:
-        return self.SCORING_RULES
+        rules = self.SCORING_RULES
+        format_rule = self.FORMAT_RULES.get(self.format_type, "")
+        if format_rule:
+            rules += "\n" + format_rule
+        return rules
+    
+    def _validate_format(self, output: str) -> tuple:
+        if self.format_type == "json":
+            try:
+                json.loads(output)
+                return True, "JSON格式有效"
+            except json.JSONDecodeError as e:
+                return False, f"JSON格式错误: {str(e)}"
+        
+        elif self.format_type == "yaml":
+            try:
+                yaml.safe_load(output)
+                return True, "YAML格式有效"
+            except yaml.YAMLError as e:
+                return False, f"YAML格式错误: {str(e)}"
+        
+        elif self.format_type == "xml":
+            if re.search(r'<\?xml', output) and re.search(r'</\w+>', output):
+                return True, "XML格式基本有效"
+            return False, "XML格式可能无效"
+        
+        elif self.format_type == "markdown":
+            has_headers = bool(re.search(r'^#{1,6}\s+', output, re.MULTILINE))
+            has_lists = bool(re.search(r'^[\s]*[-*\d]+\.', output, re.MULTILINE))
+            has_code = bool(re.search(r'```', output))
+            score = sum([has_headers, has_lists, has_code])
+            if score >= 2:
+                return True, f"Markdown格式良好({score}/3元素)"
+            return False, f"Markdown元素较少({score}/3)"
+        
+        elif self.format_type == "csv":
+            lines = output.strip().split('\n')
+            if len(lines) < 2:
+                return False, "CSV数据不足"
+            col_counts = [len(line.split(',')) for line in lines]
+            if len(set(col_counts)) == 1:
+                return True, "CSV格式正确"
+            return False, f"列数不一致: {col_counts}"
+        
+        return True, "格式检查完成"
     
     def evaluate(self, task: str, output: str) -> EvaluationResult:
         is_error, error_msg = self._is_error_output(output)
@@ -102,6 +242,14 @@ class Evaluator:
                 creativity_reason="执行错误，无法评估"
             )
         
+        format_valid, format_msg = self._validate_format(output)
+        
+        format_compliance_score = 5 if format_valid else 2
+        if not format_valid:
+            format_msg = f"格式检查: {format_msg}"
+        else:
+            format_msg = f"格式检查通过: {format_msg}"
+        
         system = f"""你是一个严格的评委。根据任务和输出进行多维度评分。
 输出必须是JSON格式：
 {{
@@ -116,9 +264,13 @@ class Evaluator:
   "feedback": "总体改进建议"
 }}
 
-评分必须严格按照以下标准：
+任务类型: 文档生成
+输出格式: {self.output_format}
+格式检查结果: {format_msg}
+
+评分标准：
 - 内容质量(40%): 评估内容与任务的相关性、准确性、完整性
-- 格式符合度(25%): 评估是否严格遵循约定的输出格式
+- 格式符合度(25%): 评估是否严格遵循约定的输出格式({self.FORMAT_RULES.get(self.format_type, '')})
 - 工具使用(20%): 评估工具选择和调用效果
 - 创意性(15%): 评估输出的创新性
 
@@ -129,7 +281,6 @@ class Evaluator:
         
         user = f"""任务：{task}
 输出：{output}
-输出格式约定：{self.output_format}
 
 请严格按照评分标准给出每个维度的分数和详细理由。"""
         
@@ -147,7 +298,7 @@ class Evaluator:
                     return max(min_val, min(max_val, int(val)))
                 
                 content_quality = clamp(data.get('content_quality', 3))
-                format_compliance = clamp(data.get('format_compliance', 3))
+                format_compliance = clamp(data.get('format_compliance', format_compliance_score))
                 tool_usage = clamp(data.get('tool_usage', 3))
                 creativity = clamp(data.get('creativity', 3))
                 
@@ -166,7 +317,7 @@ class Evaluator:
                     final_score=round(final_score, 2),
                     feedback=data.get('feedback', '评估完成'),
                     content_quality_reason=data.get('content_quality_reason', ''),
-                    format_compliance_reason=data.get('format_compliance_reason', ''),
+                    format_compliance_reason=data.get('format_compliance_reason', format_msg),
                     tool_usage_reason=data.get('tool_usage_reason', ''),
                     creativity_reason=data.get('creativity_reason', '')
                 )
@@ -175,13 +326,13 @@ class Evaluator:
         
         return EvaluationResult(
             content_quality=3,
-            format_compliance=3,
+            format_compliance=format_compliance_score,
             tool_usage=3,
             creativity=3,
             final_score=3.0,
             feedback="评分解析失败，使用默认评分",
             content_quality_reason="解析失败",
-            format_compliance_reason="解析失败",
+            format_compliance_reason=format_msg,
             tool_usage_reason="解析失败",
             creativity_reason="解析失败"
         )
