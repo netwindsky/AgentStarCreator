@@ -36,6 +36,97 @@ class Evaluator:
         r'Timeout',
     ]
     
+    DOC_TYPE_RULES = {
+        "markdown": {
+            "name": "Markdown文档",
+            "depth_criteria": """
+【内容深度与完整性】(Markdown文档):
+- 5分: >5000字，多级标题结构完整，内容极其详尽
+- 4分: 3000-5000字，结构完整，内容详尽
+- 3分: 1500-3000字，结构基本完整
+- 2分: 800-1500字，内容偏少
+- 1分: <800字，内容严重不足""",
+            "analyze": lambda o: Evaluator._analyze_markdown_depth(o)
+        },
+        "ppt": {
+            "name": "PPT幻灯片",
+            "depth_criteria": """
+【内容深度与完整性】(PPT幻灯片):
+- 5分: >15页，每页内容充实，包含详细图表/要点/分析
+- 4分: 10-15页，每页内容较充实
+- 3分: 6-10页，内容基本完整
+- 2分: 3-6页，内容偏少
+- 1分: <3页，内容严重不足""",
+            "analyze": lambda o: Evaluator._analyze_ppt_depth(o)
+        },
+        "word": {
+            "name": "Word文档",
+            "depth_criteria": """
+【内容深度与完整性】(Word文档):
+- 5分: >8000字，章节完整，包含目录、摘要、正文、结论
+- 4分: 5000-8000字，结构完整
+- 3分: 3000-5000字，内容基本完整
+- 2分: 1500-3000字，内容偏少
+- 1分: <1500字，内容严重不足""",
+            "analyze": lambda o: Evaluator._analyze_word_depth(o)
+        },
+        "excel": {
+            "name": "Excel表格",
+            "depth_criteria": """
+【内容深度与完整性】(Excel表格):
+- 5分: >10个sheet，数据完整，公式/图表丰富
+- 4分: 5-10个sheet，数据较完整
+- 3分: 2-5个sheet，基本可用
+- 2分: 1-2个sheet，数据偏少
+- 1分: 无有效数据""",
+            "analyze": lambda o: Evaluator._analyze_excel_depth(o)
+        },
+        "json": {
+            "name": "JSON数据",
+            "depth_criteria": """
+【内容深度与完整性】(JSON数据):
+- 5分: 数据结构完整，字段丰富，>50个键值对
+- 4分: 结构较完整，20-50个键值对
+- 3分: 基本结构，10-20个键值对
+- 2分: 结构简单，<10个键值对
+- 1分: 数据严重不足""",
+            "analyze": lambda o: Evaluator._analyze_json_depth(o)
+        },
+        "yaml": {
+            "name": "YAML配置",
+            "depth_criteria": """
+【内容深度与完整性】(YAML配置):
+- 5分: 配置项完整，>30个配置项，结构清晰
+- 4分: 配置较完整，15-30个配置项
+- 3分: 基本配置，8-15个配置项
+- 2分: 配置简单，<8个配置项
+- 1分: 配置严重不足""",
+            "analyze": lambda o: Evaluator._analyze_yaml_depth(o)
+        },
+        "csv": {
+            "name": "CSV数据",
+            "depth_criteria": """
+【内容深度与完整性】(CSV数据):
+- 5分: >1000行数据，字段完整
+- 4分: 500-1000行数据
+- 3分: 100-500行数据
+- 2分: 20-100行数据
+- 1分: <20行数据""",
+            "analyze": lambda o: Evaluator._analyze_csv_depth(o)
+        },
+        "纯文本": {
+            "name": "纯文本",
+            "depth_criteria": """
+【内容深度与完整性】(纯文本):
+- 5分: >5000字，内容极其详尽
+- 4分: 3000-5000字，内容详尽
+- 3分: 1500-3000字，内容基本完整
+- 2分: 800-1500字，内容偏少
+- 1分: <800字，内容严重不足""",
+            "analyze": lambda o: Evaluator._analyze_text_depth(o)
+        }
+    }
+    
     FORMAT_RULES = {
         "markdown": """
 【Markdown格式标准】(5分制):
@@ -101,6 +192,30 @@ class Evaluator:
 - 2分: 格式混乱
 - 1分: 完全无效的CSV
 """,
+        "ppt": """
+【PPT格式标准】(5分制):
+- 5分: 结构清晰，包含封面、目录、正文、结尾
+- 4分: 结构较完整
+- 3分: 有基本结构
+- 2分: 结构混乱
+- 1分: 无结构
+""",
+        "word": """
+【Word格式标准】(5分制):
+- 5分: 结构完整，有标题、目录、正文、页眉页脚
+- 4分: 结构较完整
+- 3分: 有基本格式
+- 2分: 格式混乱
+- 1分: 无格式
+""",
+        "excel": """
+【Excel格式标准】(5分制):
+- 5分: 有表头、公式、函数、多sheet
+- 4分: 有表头和基本公式
+- 3分: 有基本数据
+- 2分: 数据混乱
+- 1分: 无有效数据
+""",
         "纯文本": """
 【纯文本格式标准】(5分制):
 - 5分: 文本清晰易读:
@@ -130,12 +245,7 @@ class Evaluator:
 - 1分: 内容完全偏离任务要求
 
 【内容深度与完整性】(权重25%)
-文档类任务必须包含足够丰富的内容:
-- 5分: 内容极其详尽，篇幅充足(>3000字)，涵盖所有必要章节和分析
-- 4分: 内容详尽，篇幅充足(2000-3000字)，覆盖主要要点
-- 3分: 内容基本完整，但篇幅偏少(1000-2000字)
-- 2分: 内容单薄，篇幅不足(<1000字)，缺少重要章节
-- 1分: 内容严重不足，过于简略
+根据不同文档类型有不同的评估标准
 
 【格式符合度】(权重20%)
 - 5分: 完全按照约定的输出格式要求，无任何偏差
@@ -162,10 +272,204 @@ class Evaluator:
 ========================================
 """
     
+    @staticmethod
+    def _analyze_markdown_depth(output: str) -> tuple:
+        char_count = len(output)
+        lines = output.strip().split('\n')
+        line_count = len(lines)
+        heading_count = len(re.findall(r'^#{1,6}\s+', output, re.MULTILINE))
+        paragraph_count = len([p for p in output.split('\n\n') if p.strip()])
+        
+        depth_info = f"字数: {char_count}, 行数: {line_count}, 标题数: {heading_count}, 段落数: {paragraph_count}"
+        
+        if char_count > 5000:
+            return 5, f"内容极其详尽({depth_info})"
+        elif char_count > 3000:
+            return 4, f"内容详尽({depth_info})"
+        elif char_count > 1500:
+            return 3, f"内容基本完整({depth_info})"
+        elif char_count > 800:
+            return 2, f"内容偏少({depth_info})"
+        else:
+            return 1, f"内容严重不足({depth_info})"
+    
+    @staticmethod
+    def _analyze_ppt_depth(output: str) -> tuple:
+        slide_markers = re.findall(r'Slide \d+|第\d+页|第\d+张|===|---', output, re.IGNORECASE)
+        slide_count = len(slide_markers)
+        if slide_count == 0:
+            slide_count = len(re.findall(r'^#{1,6}\s+', output, re.MULTILINE))
+        
+        bullet_points = len(re.findall(r'^[\s]*[-*\d]+\.', output, re.MULTILINE))
+        
+        depth_info = f"页数: {slide_count}, 要点数: {bullet_points}"
+        
+        if slide_count > 15:
+            return 5, f"PPT内容极其充实({depth_info})"
+        elif slide_count > 10:
+            return 4, f"PPT内容较充实({depth_info})"
+        elif slide_count > 6:
+            return 3, f"PPT内容基本完整({depth_info})"
+        elif slide_count > 3:
+            return 2, f"PPT内容偏少({depth_info})"
+        else:
+            return 1, f"PPT内容严重不足({depth_info})"
+    
+    @staticmethod
+    def _analyze_word_depth(output: str) -> tuple:
+        char_count = len(output)
+        has_toc = bool(re.search(r'目录|Table of Contents', output))
+        has_conclusion = bool(re.search(r'结论|总结|总结语', output))
+        
+        depth_info = f"字数: {char_count}, 有目录: {'是' if has_toc else '否'}, 有结论: {'是' if has_conclusion else '否'}"
+        
+        if char_count > 8000:
+            return 5, f"Word文档极其详尽({depth_info})"
+        elif char_count > 5000:
+            return 4, f"Word文档详尽({depth_info})"
+        elif char_count > 3000:
+            return 3, f"Word文档基本完整({depth_info})"
+        elif char_count > 1500:
+            return 2, f"Word文档内容偏少({depth_info})"
+        else:
+            return 1, f"Word文档内容严重不足({depth_info})"
+    
+    @staticmethod
+    def _analyze_excel_depth(output: str) -> tuple:
+        sheet_markers = re.findall(r'Sheet\d+|Sheet \d+|\[[\w\s]+\]', output)
+        sheet_count = max(len(sheet_markers), 1)
+        
+        table_pattern = re.findall(r'\|\s*\w+', output)
+        row_count = len(table_pattern)
+        
+        depth_info = f"Sheet数: {sheet_count}, 表格行数: {row_count}"
+        
+        if sheet_count > 10:
+            return 5, f"Excel内容极其丰富({depth_info})"
+        elif sheet_count > 5:
+            return 4, f"Excel内容较丰富({depth_info})"
+        elif sheet_count > 2:
+            return 3, f"Excel内容基本完整({depth_info})"
+        elif sheet_count > 1:
+            return 2, f"Excel内容偏少({depth_info})"
+        else:
+            return 1, f"Excel内容严重不足({depth_info})"
+    
+    @staticmethod
+    def _analyze_json_depth(output: str) -> tuple:
+        try:
+            data = json.loads(output)
+            key_count = Evaluator._count_json_keys(data)
+            
+            depth_info = f"键值对数: {key_count}"
+            
+            if key_count > 50:
+                return 5, f"JSON数据极其丰富({depth_info})"
+            elif key_count > 20:
+                return 4, f"JSON数据较丰富({depth_info})"
+            elif key_count > 10:
+                return 3, f"JSON数据基本完整({depth_info})"
+            elif key_count > 3:
+                return 2, f"JSON数据偏少({depth_info})"
+            else:
+                return 1, f"JSON数据严重不足({depth_info})"
+        except:
+            return 2, "JSON格式无效，无法评估"
+    
+    @staticmethod
+    def _count_json_keys(obj, count=0):
+        if isinstance(obj, dict):
+            count += len(obj)
+            for v in obj.values():
+                count = Evaluator._count_json_keys(v, count)
+        elif isinstance(obj, list):
+            for item in obj:
+                count = Evaluator._count_json_keys(item, count)
+        return count
+    
+    @staticmethod
+    def _analyze_yaml_depth(output: str) -> tuple:
+        try:
+            data = yaml.safe_load(output)
+            key_count = Evaluator._count_json_keys(data)
+            
+            depth_info = f"配置项数: {key_count}"
+            
+            if key_count > 30:
+                return 5, f"YAML配置极其完整({depth_info})"
+            elif key_count > 15:
+                return 4, f"YAML配置较完整({depth_info})"
+            elif key_count > 8:
+                return 3, f"YAML配置基本完整({depth_info})"
+            elif key_count > 3:
+                return 2, f"YAML配置偏少({depth_info})"
+            else:
+                return 1, f"YAML配置严重不足({depth_info})"
+        except:
+            return 2, "YAML格式无效，无法评估"
+    
+    @staticmethod
+    def _analyze_csv_depth(output: str) -> tuple:
+        lines = [l for l in output.strip().split('\n') if l.strip()]
+        row_count = len(lines)
+        
+        depth_info = f"数据行数: {row_count}"
+        
+        if row_count > 1000:
+            return 5, f"CSV数据极其丰富({depth_info})"
+        elif row_count > 500:
+            return 4, f"CSV数据较丰富({depth_info})"
+        elif row_count > 100:
+            return 3, f"CSV数据基本完整({depth_info})"
+        elif row_count > 20:
+            return 2, f"CSV数据偏少({depth_info})"
+        else:
+            return 1, f"CSV数据严重不足({depth_info})"
+    
+    @staticmethod
+    def _analyze_text_depth(output: str) -> tuple:
+        char_count = len(output)
+        line_count = len(output.strip().split('\n'))
+        
+        depth_info = f"字数: {char_count}, 行数: {line_count}"
+        
+        if char_count > 5000:
+            return 5, f"内容极其详尽({depth_info})"
+        elif char_count > 3000:
+            return 4, f"内容详尽({depth_info})"
+        elif char_count > 1500:
+            return 3, f"内容基本完整({depth_info})"
+        elif char_count > 800:
+            return 2, f"内容偏少({depth_info})"
+        else:
+            return 1, f"内容严重不足({depth_info})"
+    
     def __init__(self, eval_client: ModelClient, output_format: str):
         self.eval_client = eval_client
         self.output_format = output_format
+        self.doc_type = self._detect_doc_type(output_format)
         self.format_type = self._detect_format_type(output_format)
+    
+    def _detect_doc_type(self, output_format: str) -> str:
+        fmt_lower = output_format.lower()
+        if "ppt" in fmt_lower or "powerpoint" in fmt_lower or "幻灯片" in fmt_lower or "演示" in fmt_lower:
+            return "ppt"
+        elif "word" in fmt_lower or "文档" in fmt_lower or "docx" in fmt_lower:
+            return "word"
+        elif "excel" in fmt_lower or "表格" in fmt_lower or "xlsx" in fmt_lower or "spreadsheet" in fmt_lower:
+            return "excel"
+        elif "markdown" in fmt_lower or "md" in fmt_lower:
+            return "markdown"
+        elif "json" in fmt_lower:
+            return "json"
+        elif "yaml" in fmt_lower or "yml" in fmt_lower:
+            return "yaml"
+        elif "csv" in fmt_lower:
+            return "csv"
+        elif "xml" in fmt_lower:
+            return "xml"
+        else:
+            return "纯文本"
     
     def _detect_format_type(self, output_format: str) -> str:
         fmt_lower = output_format.lower()
@@ -193,6 +497,11 @@ class Evaluator:
         format_rule = self.FORMAT_RULES.get(self.format_type, "")
         if format_rule:
             rules += "\n" + format_rule
+        
+        doc_type_rule = self.DOC_TYPE_RULES.get(self.doc_type, {})
+        if doc_type_rule.get("depth_criteria"):
+            rules += "\n" + doc_type_rule["depth_criteria"]
+        
         return rules
     
     def _validate_format(self, output: str) -> tuple:
@@ -235,30 +544,6 @@ class Evaluator:
         
         return True, "格式检查完成"
     
-    def _analyze_depth(self, output: str) -> tuple:
-        char_count = len(output)
-        word_count = len(output.split())
-        
-        lines = output.strip().split('\n')
-        line_count = len(lines)
-        
-        heading_count = len(re.findall(r'^#{1,6}\s+', output, re.MULTILINE))
-        
-        paragraph_count = len([p for p in output.split('\n\n') if p.strip()])
-        
-        depth_info = f"字数: {char_count}, 行数: {line_count}, 标题数: {heading_count}, 段落数: {paragraph_count}"
-        
-        if char_count > 5000:
-            return 5, f"内容极其详尽({depth_info})"
-        elif char_count > 3000:
-            return 4, f"内容详尽({depth_info})"
-        elif char_count > 1500:
-            return 3, f"内容基本完整({depth_info})"
-        elif char_count > 800:
-            return 2, f"内容偏少({depth_info})"
-        else:
-            return 1, f"内容严重不足({depth_info})"
-    
     def evaluate(self, task: str, output: str) -> EvaluationResult:
         is_error, error_msg = self._is_error_output(output)
         
@@ -286,15 +571,17 @@ class Evaluator:
         else:
             format_msg = f"格式检查通过: {format_msg}"
         
-        depth_score, depth_msg = self._analyze_depth(output)
+        doc_type_info = self.DOC_TYPE_RULES.get(self.doc_type, {})
+        analyze_func = doc_type_info.get("analyze", lambda o: Evaluator._analyze_text_depth(o))
+        depth_score, depth_msg = analyze_func(output)
         
         system = f"""你是一个严格的评委。根据任务和输出进行多维度评分。
 输出必须是JSON格式：
 {{
   "content_quality": 1-5分,
   "content_quality_reason": "详细说明为什么给这个分数",
-  "depth_completeness": 1-5分,
-  "depth_completeness_reason": "详细说明为什么给这个分数，结合字数和内容丰富程度",
+  "depth_compliance": 1-5分,
+  "depth_completeness_reason": "详细说明为什么给这个分数，结合字数/页数等指标",
   "format_compliance": 1-5分,
   "format_compliance_reason": "详细说明为什么给这个分数",
   "tool_usage": 1-5分,
@@ -304,15 +591,15 @@ class Evaluator:
   "feedback": "总体改进建议"
 }}
 
-任务类型: 文档生成
-输出格式: {self.output_format}
+文档类型: {doc_type_info.get('name', '纯文本')}
+任务：{task}
 格式检查结果: {format_msg}
 内容深度分析: {depth_msg}
 
 评分标准：
 - 内容质量(30%): 评估内容与任务的相关性、准确性
-- 内容深度与完整性(25%): 评估文档篇幅是否充足、内容是否丰富。详细文档应>3000字，标准文档应>1500字
-- 格式符合度(20%): 评估是否严格遵循约定的输出格式({self.FORMAT_RULES.get(self.format_type, '')})
+- 内容深度与完整性(25%): {doc_type_info.get('depth_criteria', '评估文档篇幅是否充足')}
+- 格式符合度(20%): 评估是否严格遵循约定的输出格式
 - 工具使用(15%): 评估工具选择和调用效果
 - 创意性(10%): 评估输出的创新性
 
@@ -321,8 +608,8 @@ class Evaluator:
 2. 哪些地方需要改进
 3. 给出具体的分数依据"""
         
-        user = f"""任务：{task}
-输出：{output}
+        user = f"""输出内容：
+{output}
 
 请严格按照评分标准给出每个维度的分数和详细理由。"""
         
