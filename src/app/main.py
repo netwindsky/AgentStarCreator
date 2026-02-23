@@ -351,6 +351,18 @@ class OptimizationRunner:
         conn.close()
 
 
+def update_model_index(model_type: str):
+    ollama_models = st.session_state.get('ollama_models', [])
+    if model_type == 'base':
+        selected = st.session_state.get('base_model_select')
+        if selected and selected in ollama_models:
+            st.session_state['base_model_index'] = ollama_models.index(selected)
+    elif model_type == 'eval':
+        selected = st.session_state.get('eval_model_select')
+        if selected and selected in ollama_models:
+            st.session_state['eval_model_index'] = ollama_models.index(selected)
+
+
 def main():
     init_db(settings.DB_PATH)
     settings.setup_file_dir()
@@ -437,42 +449,36 @@ def show_create_page():
             
             if not ollama_models:
                 st.warning("无法连接Ollama，请确保Ollama正在运行")
-                base_model = st.text_input("基础模型", value=settings.DEFAULT_MODEL)
-                eval_model = st.text_input("评估模型", value=settings.DEFAULT_MODEL)
+                base_model = st.text_input("基础模型", value=settings.DEFAULT_MODEL, key="base_model_text")
+                eval_model = st.text_input("评估模型", value=settings.DEFAULT_MODEL, key="eval_model_text")
             else:
-                if 'last_base_model' not in st.session_state:
-                    st.session_state['last_base_model'] = settings.DEFAULT_MODEL
-                if 'last_eval_model' not in st.session_state:
-                    st.session_state['last_eval_model'] = settings.DEFAULT_MODEL
+                if 'base_model_index' not in st.session_state:
+                    if settings.DEFAULT_MODEL in ollama_models:
+                        st.session_state['base_model_index'] = ollama_models.index(settings.DEFAULT_MODEL)
+                    else:
+                        st.session_state['base_model_index'] = 0
                 
-                base_default_idx = 0
-                if st.session_state['last_base_model'] in ollama_models:
-                    base_default_idx = ollama_models.index(st.session_state['last_base_model'])
-                elif settings.DEFAULT_MODEL in ollama_models:
-                    base_default_idx = ollama_models.index(settings.DEFAULT_MODEL)
-                
-                eval_default_idx = 0
-                if st.session_state['last_eval_model'] in ollama_models:
-                    eval_default_idx = ollama_models.index(st.session_state['last_eval_model'])
-                elif settings.DEFAULT_MODEL in ollama_models:
-                    eval_default_idx = ollama_models.index(settings.DEFAULT_MODEL)
+                if 'eval_model_index' not in st.session_state:
+                    if settings.DEFAULT_MODEL in ollama_models:
+                        st.session_state['eval_model_index'] = ollama_models.index(settings.DEFAULT_MODEL)
+                    else:
+                        st.session_state['eval_model_index'] = 0
                 
                 base_model = st.selectbox(
                     "基础模型",
                     options=ollama_models,
-                    index=base_default_idx,
-                    key="base_model_select"
+                    index=st.session_state['base_model_index'],
+                    key="base_model_select",
+                    on_change=lambda: update_model_index('base')
                 )
                 
                 eval_model = st.selectbox(
                     "评估模型",
                     options=ollama_models,
-                    index=eval_default_idx,
-                    key="eval_model_select"
+                    index=st.session_state['eval_model_index'],
+                    key="eval_model_select",
+                    on_change=lambda: update_model_index('eval')
                 )
-                
-                st.session_state['last_base_model'] = base_model
-                st.session_state['last_eval_model'] = eval_model
         
         submitted = st.form_submit_button("开始生成", type="primary")
     
