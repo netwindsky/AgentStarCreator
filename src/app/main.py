@@ -440,23 +440,39 @@ def show_create_page():
                 base_model = st.text_input("基础模型", value=settings.DEFAULT_MODEL)
                 eval_model = st.text_input("评估模型", value=settings.DEFAULT_MODEL)
             else:
-                default_idx = 0
-                if settings.DEFAULT_MODEL in ollama_models:
-                    default_idx = ollama_models.index(settings.DEFAULT_MODEL)
+                if 'last_base_model' not in st.session_state:
+                    st.session_state['last_base_model'] = settings.DEFAULT_MODEL
+                if 'last_eval_model' not in st.session_state:
+                    st.session_state['last_eval_model'] = settings.DEFAULT_MODEL
+                
+                base_default_idx = 0
+                if st.session_state['last_base_model'] in ollama_models:
+                    base_default_idx = ollama_models.index(st.session_state['last_base_model'])
+                elif settings.DEFAULT_MODEL in ollama_models:
+                    base_default_idx = ollama_models.index(settings.DEFAULT_MODEL)
+                
+                eval_default_idx = 0
+                if st.session_state['last_eval_model'] in ollama_models:
+                    eval_default_idx = ollama_models.index(st.session_state['last_eval_model'])
+                elif settings.DEFAULT_MODEL in ollama_models:
+                    eval_default_idx = ollama_models.index(settings.DEFAULT_MODEL)
                 
                 base_model = st.selectbox(
                     "基础模型",
                     options=ollama_models,
-                    index=default_idx,
+                    index=base_default_idx,
                     key="base_model_select"
                 )
                 
                 eval_model = st.selectbox(
                     "评估模型",
                     options=ollama_models,
-                    index=default_idx,
+                    index=eval_default_idx,
                     key="eval_model_select"
                 )
+                
+                st.session_state['last_base_model'] = base_model
+                st.session_state['last_eval_model'] = eval_model
         
         submitted = st.form_submit_button("开始生成", type="primary")
     
