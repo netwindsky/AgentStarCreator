@@ -587,19 +587,22 @@ def show_running_page(agent_id: int):
 - 工具使用(20%): 评估工具选择和调用效果
 - 创意性(15%): 评估输出的创新性""", language="markdown")
                 
-                col1, col2, col3, col4 = st.columns(4)
+                col1, col2, col3, col4, col5 = st.columns(5)
                 with col1:
                     st.metric("内容质量", f"{eval_obj.content_quality}/5", help=eval_obj.content_quality_reason)
                 with col2:
-                    st.metric("格式符合度", f"{eval_obj.format_compliance}/5", help=eval_obj.format_compliance_reason)
+                    st.metric("深度完整性", f"{eval_obj.depth_completeness}/5", help=eval_obj.depth_completeness_reason)
                 with col3:
-                    st.metric("工具使用", f"{eval_obj.tool_usage}/5", help=eval_obj.tool_usage_reason)
+                    st.metric("格式符合度", f"{eval_obj.format_compliance}/5", help=eval_obj.format_compliance_reason)
                 with col4:
+                    st.metric("工具使用", f"{eval_obj.tool_usage}/5", help=eval_obj.tool_usage_reason)
+                with col5:
                     st.metric("创意性", f"{eval_obj.creativity}/5", help=eval_obj.creativity_reason)
                 
                 if eval_obj.content_quality_reason:
                     with st.expander("📝 各维度评分理由"):
                         st.markdown(f"**内容质量 ({eval_obj.content_quality}/5):** {eval_obj.content_quality_reason}")
+                        st.markdown(f"**深度完整性 ({eval_obj.depth_completeness}/5):** {eval_obj.depth_completeness_reason}")
                         st.markdown(f"**格式符合度 ({eval_obj.format_compliance}/5):** {eval_obj.format_compliance_reason}")
                         st.markdown(f"**工具使用 ({eval_obj.tool_usage}/5):** {eval_obj.tool_usage_reason}")
                         st.markdown(f"**创意性 ({eval_obj.creativity}/5):** {eval_obj.creativity_reason}")

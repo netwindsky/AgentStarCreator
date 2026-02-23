@@ -13,12 +13,14 @@ class EvaluationResult:
     format_compliance: int
     tool_usage: int
     creativity: int
+    depth_completeness: int
     final_score: float
     feedback: str
     content_quality_reason: str = ""
     format_compliance_reason: str = ""
     tool_usage_reason: str = ""
     creativity_reason: str = ""
+    depth_completeness_reason: str = ""
 
 
 class Evaluator:
@@ -118,37 +120,45 @@ class Evaluator:
 评分规则说明
 ========================================
 
-本评估系统从4个维度对Agent输出进行评分：
+本评估系统从5个维度对Agent输出进行评分：
 
-【内容质量】(权重40%)
+【内容质量】(权重30%)
 - 5分: 输出内容完全符合任务要求，信息准确完整，逻辑清晰
 - 4分: 内容基本符合要求，有少量遗漏或不够详细
 - 3分: 内容基本满足任务要求，但有部分不准确或不完整
 - 2分: 内容与任务要求有较大偏差
 - 1分: 内容完全偏离任务要求
 
-【格式符合度】(权重25%)
+【内容深度与完整性】(权重25%)
+文档类任务必须包含足够丰富的内容:
+- 5分: 内容极其详尽，篇幅充足(>3000字)，涵盖所有必要章节和分析
+- 4分: 内容详尽，篇幅充足(2000-3000字)，覆盖主要要点
+- 3分: 内容基本完整，但篇幅偏少(1000-2000字)
+- 2分: 内容单薄，篇幅不足(<1000字)，缺少重要章节
+- 1分: 内容严重不足，过于简略
+
+【格式符合度】(权重20%)
 - 5分: 完全按照约定的输出格式要求，无任何偏差
 - 4分: 格式基本正确，有轻微不符合
 - 3分: 格式部分符合要求
 - 2分: 格式与要求有较大偏差
 - 1分: 完全不符合约定格式
 
-【工具使用】(权重20%)
+【工具使用】(权重15%)
 - 5分: 正确选择并使用了所有必要的工具
 - 4分: 工具选择基本正确，使用效果良好
 - 3分: 工具选择和使用基本合理
 - 2分: 工具选择不当或使用效果不佳
 - 1分: 未正确使用工具
 
-【创意性】(权重15%)
+【创意性】(权重10%)
 - 5分: 输出非常有创意，超出预期
 - 4分: 输出有一定创意
 - 3分: 输出中规中矩
 - 2分: 创意较少
 - 1分: 缺乏创意
 
-最终得分 = 内容质量×0.4 + 格式符合度×0.25 + 工具使用×0.2 + 创意性×0.15
+最终得分 = 内容质量×0.3 + 深度完整性×0.25 + 格式符合度×0.2 + 工具使用×0.15 + 创意性×0.10
 ========================================
 """
     
@@ -225,6 +235,30 @@ class Evaluator:
         
         return True, "格式检查完成"
     
+    def _analyze_depth(self, output: str) -> tuple:
+        char_count = len(output)
+        word_count = len(output.split())
+        
+        lines = output.strip().split('\n')
+        line_count = len(lines)
+        
+        heading_count = len(re.findall(r'^#{1,6}\s+', output, re.MULTILINE))
+        
+        paragraph_count = len([p for p in output.split('\n\n') if p.strip()])
+        
+        depth_info = f"字数: {char_count}, 行数: {line_count}, 标题数: {heading_count}, 段落数: {paragraph_count}"
+        
+        if char_count > 5000:
+            return 5, f"内容极其详尽({depth_info})"
+        elif char_count > 3000:
+            return 4, f"内容详尽({depth_info})"
+        elif char_count > 1500:
+            return 3, f"内容基本完整({depth_info})"
+        elif char_count > 800:
+            return 2, f"内容偏少({depth_info})"
+        else:
+            return 1, f"内容严重不足({depth_info})"
+    
     def evaluate(self, task: str, output: str) -> EvaluationResult:
         is_error, error_msg = self._is_error_output(output)
         
@@ -234,12 +268,14 @@ class Evaluator:
                 format_compliance=1,
                 tool_usage=1,
                 creativity=1,
+                depth_completeness=1,
                 final_score=1.0,
                 feedback=f"Agent执行失败，{error_msg}。输出内容: {output[:200]}",
                 content_quality_reason="执行错误，无法评估",
                 format_compliance_reason="执行错误，无法评估",
                 tool_usage_reason="执行错误，无法评估",
-                creativity_reason="执行错误，无法评估"
+                creativity_reason="执行错误，无法评估",
+                depth_completeness_reason="执行错误，无法评估"
             )
         
         format_valid, format_msg = self._validate_format(output)
@@ -250,11 +286,15 @@ class Evaluator:
         else:
             format_msg = f"格式检查通过: {format_msg}"
         
+        depth_score, depth_msg = self._analyze_depth(output)
+        
         system = f"""你是一个严格的评委。根据任务和输出进行多维度评分。
 输出必须是JSON格式：
 {{
   "content_quality": 1-5分,
   "content_quality_reason": "详细说明为什么给这个分数",
+  "depth_completeness": 1-5分,
+  "depth_completeness_reason": "详细说明为什么给这个分数，结合字数和内容丰富程度",
   "format_compliance": 1-5分,
   "format_compliance_reason": "详细说明为什么给这个分数",
   "tool_usage": 1-5分,
@@ -267,12 +307,14 @@ class Evaluator:
 任务类型: 文档生成
 输出格式: {self.output_format}
 格式检查结果: {format_msg}
+内容深度分析: {depth_msg}
 
 评分标准：
-- 内容质量(40%): 评估内容与任务的相关性、准确性、完整性
-- 格式符合度(25%): 评估是否严格遵循约定的输出格式({self.FORMAT_RULES.get(self.format_type, '')})
-- 工具使用(20%): 评估工具选择和调用效果
-- 创意性(15%): 评估输出的创新性
+- 内容质量(30%): 评估内容与任务的相关性、准确性
+- 内容深度与完整性(25%): 评估文档篇幅是否充足、内容是否丰富。详细文档应>3000字，标准文档应>1500字
+- 格式符合度(20%): 评估是否严格遵循约定的输出格式({self.FORMAT_RULES.get(self.format_type, '')})
+- 工具使用(15%): 评估工具选择和调用效果
+- 创意性(10%): 评估输出的创新性
 
 每个维度的reason必须具体说明：
 1. 哪些地方做得好
@@ -298,15 +340,17 @@ class Evaluator:
                     return max(min_val, min(max_val, int(val)))
                 
                 content_quality = clamp(data.get('content_quality', 3))
+                depth_completeness = clamp(data.get('depth_completeness', depth_score))
                 format_compliance = clamp(data.get('format_compliance', format_compliance_score))
                 tool_usage = clamp(data.get('tool_usage', 3))
                 creativity = clamp(data.get('creativity', 3))
                 
                 final_score = (
-                    content_quality * 0.4 +
-                    format_compliance * 0.25 +
-                    tool_usage * 0.2 +
-                    creativity * 0.15
+                    content_quality * 0.3 +
+                    depth_completeness * 0.25 +
+                    format_compliance * 0.2 +
+                    tool_usage * 0.15 +
+                    creativity * 0.1
                 )
                 
                 return EvaluationResult(
@@ -314,12 +358,14 @@ class Evaluator:
                     format_compliance=format_compliance,
                     tool_usage=tool_usage,
                     creativity=creativity,
+                    depth_completeness=depth_completeness,
                     final_score=round(final_score, 2),
                     feedback=data.get('feedback', '评估完成'),
                     content_quality_reason=data.get('content_quality_reason', ''),
                     format_compliance_reason=data.get('format_compliance_reason', format_msg),
                     tool_usage_reason=data.get('tool_usage_reason', ''),
-                    creativity_reason=data.get('creativity_reason', '')
+                    creativity_reason=data.get('creativity_reason', ''),
+                    depth_completeness_reason=data.get('depth_completeness_reason', depth_msg)
                 )
         except Exception as e:
             pass
@@ -329,10 +375,18 @@ class Evaluator:
             format_compliance=format_compliance_score,
             tool_usage=3,
             creativity=3,
-            final_score=3.0,
+            depth_completeness=depth_score,
+            final_score=(
+                3 * 0.3 +
+                depth_score * 0.25 +
+                format_compliance_score * 0.2 +
+                3 * 0.15 +
+                3 * 0.1
+            ),
             feedback="评分解析失败，使用默认评分",
             content_quality_reason="解析失败",
             format_compliance_reason=format_msg,
             tool_usage_reason="解析失败",
-            creativity_reason="解析失败"
+            creativity_reason="解析失败",
+            depth_completeness_reason=depth_msg
         )
