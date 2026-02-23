@@ -2,6 +2,8 @@ from openai import OpenAI
 from typing import Optional, Generator, Callable, List
 import requests
 
+from src.config.settings import settings
+
 
 def get_ollama_models(ollama_url: str = "http://localhost:11434") -> List[str]:
     try:
@@ -22,23 +24,23 @@ class ModelClient:
         model_name: str = "deepseek-r1:7b",
         api_base: Optional[str] = None,
         api_key: Optional[str] = None,
-        timeout: int = 120
+        timeout: Optional[int] = None
     ):
         self.source = source
         self.model_name = model_name
-        self.timeout = timeout
+        self.timeout = timeout or settings.MODEL_TIMEOUT
         
         if source == "ollama":
             self.client = OpenAI(
                 base_url='http://localhost:11434/v1',
                 api_key='ollama',
-                timeout=timeout
+                timeout=self.timeout
             )
         elif source == "api":
             self.client = OpenAI(
                 base_url=api_base,
                 api_key=api_key,
-                timeout=timeout
+                timeout=self.timeout
             )
         else:
             raise ValueError(f"Unknown source: {source}")

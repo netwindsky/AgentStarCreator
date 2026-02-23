@@ -25,6 +25,8 @@ class Settings:
     TASK_TIMEOUT: int = int(os.getenv("TASK_TIMEOUT", "60"))
     MAX_AGENT_ITERATIONS: int = int(os.getenv("MAX_AGENT_ITERATIONS", "10"))
     
+    MODEL_TIMEOUT: int = int(os.getenv("MODEL_TIMEOUT", "300"))
+    
     @classmethod
     def setup_file_dir(cls):
         os.makedirs(cls.AGENT_FILE_DIR, exist_ok=True)

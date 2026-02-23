@@ -3,6 +3,7 @@ from typing import List, Optional, Any, Dict
 from pydantic import Field
 
 from src.core.model_client import ModelClient
+from src.config.settings import settings
 
 
 def create_agent(
@@ -11,22 +12,24 @@ def create_agent(
     model_client: ModelClient,
     temperature: float = 0.7,
     max_iterations: int = 10,
-    timeout: int = 60
+    timeout: Optional[int] = None
 ):
     base_url = str(model_client.client.base_url)
+    timeout = timeout or settings.MODEL_TIMEOUT
     
     llm = ChatOpenAI(
         model=model_client.model_name,
         base_url=base_url,
         api_key='ollama',
-        temperature=temperature
+        temperature=temperature,
+        request_timeout=timeout
     )
     
     return SimpleAgentRunner(llm, system_prompt, tools, max_iterations, timeout)
 
 
 class SimpleAgentRunner:
-    def __init__(self, llm, system_prompt: str, tools: list, max_iterations: int = 10, timeout: int = 60):
+    def __init__(self, llm, system_prompt: str, tools: list, max_iterations: int = 10, timeout: int = 300):
         self.llm = llm
         self.system_prompt = system_prompt
         self.tools = tools
