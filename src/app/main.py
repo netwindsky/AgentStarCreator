@@ -351,18 +351,6 @@ class OptimizationRunner:
         conn.close()
 
 
-def update_model_index(model_type: str):
-    ollama_models = st.session_state.get('ollama_models', [])
-    if model_type == 'base':
-        selected = st.session_state.get('base_model_select')
-        if selected and selected in ollama_models:
-            st.session_state['base_model_index'] = ollama_models.index(selected)
-    elif model_type == 'eval':
-        selected = st.session_state.get('eval_model_select')
-        if selected and selected in ollama_models:
-            st.session_state['eval_model_index'] = ollama_models.index(selected)
-
-
 def main():
     init_db(settings.DB_PATH)
     settings.setup_file_dir()
@@ -468,17 +456,18 @@ def show_create_page():
                     "基础模型",
                     options=ollama_models,
                     index=st.session_state['base_model_index'],
-                    key="base_model_select",
-                    on_change=lambda: update_model_index('base')
+                    key="base_model_select"
                 )
                 
                 eval_model = st.selectbox(
                     "评估模型",
                     options=ollama_models,
                     index=st.session_state['eval_model_index'],
-                    key="eval_model_select",
-                    on_change=lambda: update_model_index('eval')
+                    key="eval_model_select"
                 )
+                
+                st.session_state['base_model_index'] = ollama_models.index(base_model) if base_model in ollama_models else 0
+                st.session_state['eval_model_index'] = ollama_models.index(eval_model) if eval_model in ollama_models else 0
         
         submitted = st.form_submit_button("开始生成", type="primary")
     
