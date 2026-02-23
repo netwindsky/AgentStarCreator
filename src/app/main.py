@@ -577,8 +577,35 @@ def show_running_page(agent_id: int):
                     format_status = "✅ 通过" if result['format_check'] else "❌ 未通过"
                     st.metric("格式检查", format_status)
                 
-                st.markdown("**评估反馈:**")
-                st.write(result['evaluation'].feedback)
+                st.markdown("---")
+                st.markdown("### 📊 评分详情")
+                
+                eval_obj = result['evaluation']
+                st.code(eval_obj.get_scoring_rules() if hasattr(eval_obj, 'get_scoring_rules') else """评分规则:
+- 内容质量(40%): 评估内容与任务的相关性、准确性、完整性
+- 格式符合度(25%): 评估是否严格遵循约定的输出格式
+- 工具使用(20%): 评估工具选择和调用效果
+- 创意性(15%): 评估输出的创新性""", language="markdown")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("内容质量", f"{eval_obj.content_quality}/5", help=eval_obj.content_quality_reason)
+                with col2:
+                    st.metric("格式符合度", f"{eval_obj.format_compliance}/5", help=eval_obj.format_compliance_reason)
+                with col3:
+                    st.metric("工具使用", f"{eval_obj.tool_usage}/5", help=eval_obj.tool_usage_reason)
+                with col4:
+                    st.metric("创意性", f"{eval_obj.creativity}/5", help=eval_obj.creativity_reason)
+                
+                if eval_obj.content_quality_reason:
+                    with st.expander("📝 各维度评分理由"):
+                        st.markdown(f"**内容质量 ({eval_obj.content_quality}/5):** {eval_obj.content_quality_reason}")
+                        st.markdown(f"**格式符合度 ({eval_obj.format_compliance}/5):** {eval_obj.format_compliance_reason}")
+                        st.markdown(f"**工具使用 ({eval_obj.tool_usage}/5):** {eval_obj.tool_usage_reason}")
+                        st.markdown(f"**创意性 ({eval_obj.creativity}/5):** {eval_obj.creativity_reason}")
+                
+                st.markdown("**总体反馈:**")
+                st.success(eval_obj.feedback)
     
     st.subheader("� 执行日志")
     log_container = st.container()
